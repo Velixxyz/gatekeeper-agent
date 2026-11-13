@@ -1,0 +1,17 @@
+{
+  "name": "proof-gatekeeper-agent",
+  "version": "1.0.0",
+  "description": "Local Proof Gatekeeper agent endpoint for zkVerify Agent Games (read-only build; no registration, no submissions)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "circomlibjs": "^0.1.7",
+    "snarkjs": "^0.7.6"
+  }
+}
