@@ -40,7 +40,7 @@ const { generateProof } = require('./prove');
 
 const _PORT = parseInt(process.env.PORT || '3000', 10);
 const PORT = Number.isFinite(_PORT) && _PORT > 0 ? _PORT : 3000;
-const HMAC_SECRET = process.env.AGENT_GAMES_HMAC_SECRET || '';
+const HMAC_SECRET = (process.env.AGENT_GAMES_HMAC_SECRET || '').trim() || '';
 const SEEN_FILE = process.env.SEEN_FILE || './seen.json';
 const PROOF_TIMEOUT_MS = parseInt(process.env.PROOF_TIMEOUT_MS || '45000', 10);
 const MAX_BODY_BYTES = 1024 * 1024;

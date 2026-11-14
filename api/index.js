@@ -36,7 +36,7 @@ const { decide, REASON } = require('../decide');
 const { generateProof } = require('../prove');
 const { ensureCircuits, fileIsValid, ARTIFACTS } = require('../lib/circuits');
 
-const HMAC_SECRET = process.env.AGENT_GAMES_HMAC_SECRET || '';
+const HMAC_SECRET = (process.env.AGENT_GAMES_HMAC_SECRET || '').trim() || '';
 const PROOF_TIMEOUT_MS = parseInt(process.env.PROOF_TIMEOUT_MS || '45000', 10);
 const MAX_BODY_BYTES = 1024 * 1024;
 
