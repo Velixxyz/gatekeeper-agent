@@ -33,6 +33,12 @@ it runs on a permanent public HTTPS URL with no laptop or tunnel involved.
   Excluding it makes Vercel fall back to file-system routing and
   `api/index.js` becomes the Serverless Function. The PC flow is
   unaffected: `.vercelignore` only affects Vercel uploads.
+- `package.json` MUST NOT set `"main": "server.js"`. With `server.js`
+  excluded by `.vercelignore`, a `"main"` pointing at it makes the
+  build fail in seconds with "No entrypoint found in /vercel/path0"
+  (incident 14 Nov 2026, commit 33c9ada). No `"main"` + no server file
+  uploaded = Vercel builds `api/index.js` as a Serverless Function.
+  `npm start` (which runs `node server.js` directly) is unaffected.
 - `vercel.json` pins the function to `maxDuration: 60` (the platform's own
   task deadline) and includes `circuits/**` in the function bundle.
 - CommonJS throughout: snarkjs via ESM `import` hangs indefinitely on

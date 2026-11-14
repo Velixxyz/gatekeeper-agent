@@ -1,10 +1,16 @@
-# Files Vercel must NOT upload. Without this, Vercel detects server.js as
-# the project's root entrypoint ("Using server.js as the root entrypoint")
-# and serves ALL traffic through it as server.cjs — but server.js is the
-# long-running PC process (listen() at load, exports { server }), so every
-# invocation dies with "Invalid export found in module /var/task/server.cjs"
-# (incident 14 Nov 2026, 100% error rate). Excluding it makes Vercel fall
-# back to file-system routing: api/index.js becomes the Serverless Function.
+# Files Vercel must NOT upload, PLUS the package.json "main" rule (see below).
+# Lesson 1 (14 Nov 2026, 100% error rate): with server.js uploaded, Vercel
+# detected it as the root entrypoint ("Using server.js as the root
+# entrypoint") and served ALL traffic through it as server.cjs — but
+# server.js is the long-running PC process (listen() at load, exports
+# { server }), so every invocation died with "Invalid export found in
+# module /var/task/server.cjs".
+# Lesson 2 (14 Nov 2026, build failed in 6s): excluding server.js via
+# .vercelignore ALONE is not enough — package.json "main": "server.js"
+# made Vercel look for that file as the entrypoint and fail the build
+# with "No entrypoint found". package.json must NOT set "main" to
+# server.js; with no "main" and no server file uploaded, Vercel builds
+# api/index.js as a Serverless Function via file-system routing.
 # The PC flow is unaffected: .vercelignore only affects Vercel uploads,
 # git still tracks these files and `npm start` still runs server.js.
 server.js

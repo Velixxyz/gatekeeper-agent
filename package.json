@@ -2,7 +2,6 @@
   "name": "proof-gatekeeper-agent",
   "version": "1.0.0",
   "description": "Local Proof Gatekeeper agent endpoint for zkVerify Agent Games (read-only build; no registration, no submissions)",
-  "main": "server.js",
   "engines": {
     "node": "22.x"
   },
