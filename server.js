@@ -104,6 +104,15 @@ function sendSigned(res, statusCode, obj) {
 }
 
 function readRawBody(req) {
+  // Vercel's launcher may hand us a body it already read (req.body). When
+  // it is byte-exact (Buffer/string), use it: the stream may already be
+  // consumed, and reading it would yield empty bytes, which makes the
+  // HMAC check fail every signed request. Otherwise read the raw stream
+  // ourselves. Never parse JSON before verifying the signature.
+  if (req.body !== undefined && req.body !== null && typeof req.body !== 'object') {
+    return Promise.resolve(Buffer.from(String(req.body), 'utf8'));
+  }
+  if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
   return new Promise((resolve, reject) => {
     const chunks = [];
     let total = 0;
@@ -245,3 +254,7 @@ if (!process.env.VERCEL) {
 // listen-at-load capture conflict). The handler export + conditional
 // listen() above avoids both failure modes.
 module.exports = handleRequest;
+// Raw-body access is REQUIRED for HMAC verification. If Vercel's launcher
+// parses the body first, the stream is consumed and the signature check
+// sees empty bytes, so every signed request gets a 401. Do not remove.
+module.exports.config = { api: { bodyParser: false } };

@@ -21,6 +21,10 @@ HTTPS URL with no laptop or tunnel involved.
   `INTERNAL_FUNCTION_INVOCATION_FAILED` (incident 14 Nov 2026,
   deployment d54ebcd — listen-capture initialization timeout, the same
   pattern Vercel staff describe for zero-config Node servers).
+- `server.js` disables Vercel's body parser (`module.exports.config`,
+  `bodyParser: false`) and accepts a launcher-provided byte-exact
+  `req.body` before reading the stream: the HMAC is computed over the raw
+  bytes, and a consumed stream makes every signed request 401.
 - `api/index.js` is a tested fallback, not the live path; it keeps
   `bodyParser` disabled (`module.exports.config`): the HMAC is computed
   over the raw bytes, and any pre-parsing would break signature
