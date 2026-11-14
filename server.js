@@ -38,7 +38,8 @@ const { decide, REASON } = require('./decide');
 const { SeenSet } = require('./seen');
 const { generateProof } = require('./prove');
 
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const _PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = Number.isFinite(_PORT) && _PORT > 0 ? _PORT : 3000;
 const HMAC_SECRET = process.env.AGENT_GAMES_HMAC_SECRET || '';
 const SEEN_FILE = process.env.SEEN_FILE || './seen.json';
 const PROOF_TIMEOUT_MS = parseInt(process.env.PROOF_TIMEOUT_MS || '45000', 10);
@@ -167,7 +168,7 @@ async function handleTask(envelope) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   try {
     if (req.method === 'GET' && (req.url === '/health' || req.url === '/' || req.url === '/api' || req.url === '/api/index')) {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -215,15 +216,32 @@ const server = http.createServer(async (req, res) => {
     log({ level: 'error', msg: 'unhandled request error', error: String(err.message).slice(0, 200) });
     try { sendSigned(res, 200, { decision: 'REJECT', reason_code: REASON.INVALID, proof_tx: null, proof: null, public_signals: [] }); } catch { /* socket gone */ }
   }
-});
+}
 
-server.listen(PORT, () => {
-  log({ msg: 'listening', port: PORT, seen_entries: seen.size, hmac: HMAC_SECRET ? 'env-secret' : 'PLACEHOLDER' });
-});
+const server = http.createServer(handleRequest);
 
-// Vercel Node.js server capture: the platform detects this file via the
-// listen() call above and validates the default export — it MUST be a
-// function or a server. Exporting `{ server }` (a plain object) crashed
-// every invocation with "Invalid export found in module /var/task/server.cjs"
-// (incident 14 Nov 2026, deployment 8bfeb2c). Export the server itself.
-module.exports = server;
+// Listen ONLY outside Vercel. On Vercel (VERCEL=1 is set in the function
+// runtime), calling listen() during module load makes the launcher hang:
+// deployment d54ebcd (export = server + listen at load) answered every
+// request only after ~63s with INTERNAL_FUNCTION_INVOCATION_FAILED — the
+// same initialization-timeout pattern Vercel staff attribute to the
+// listen() capture path. The launcher invokes the exported handler
+// directly per request, so no listener is needed there. Locally (PC,
+// tests, bundle isolation) VERCEL is unset and the server listens as
+// before.
+if (!process.env.VERCEL) {
+  server.listen(PORT, () => {
+    log({ msg: 'listening', port: PORT, seen_entries: seen.size, hmac: HMAC_SECRET ? 'env-secret' : 'PLACEHOLDER' });
+  });
+}
+
+// Default export: the bare request handler. Vercel's launcher validates
+// the default export ("must be a function or server") and invokes a
+// function export directly per request. Exporting `{ server }` crashed
+// every invocation ("Invalid export found in module /var/task/server.cjs",
+// deployment 8bfeb2c, 14 Nov 2026); exporting the listening server itself
+// passed validation but hung every request ~63s into
+// INTERNAL_FUNCTION_INVOCATION_FAILED (deployment d54ebcd, 14 Nov 2026 —
+// listen-at-load capture conflict). The handler export + conditional
+// listen() above avoids both failure modes.
+module.exports = handleRequest;
