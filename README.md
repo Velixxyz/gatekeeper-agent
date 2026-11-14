@@ -10,6 +10,10 @@ No account was registered, nothing was submitted, and no wallet/key/secret
 was touched during this build. The HMAC secret is a placeholder env var until
 registration issues a real one.
 
+**Vercel deploy:** the same agent is packaged as a Serverless Function in
+`api/index.js` — see [VERCEL.md](VERCEL.md). No laptop or tunnel needed;
+the endpoint is a permanent `https://<project>.vercel.app/api` URL.
+
 ## Run
 
 ```sh

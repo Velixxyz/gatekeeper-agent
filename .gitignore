@@ -4,3 +4,5 @@ seen.json
 test-seen.json
 *.tmp-*
 probe_*.js
+circuits/*.wasm
+circuits/*.zkey
