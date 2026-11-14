@@ -1,18 +1,24 @@
 # Deploying the Gatekeeper agent on Vercel
 
-Same agent, same decision logic and real Groth16 proofs as the PC version
-(`server.js`), packaged as a Vercel Serverless Function (`api/index.js`) so
-it runs on a permanent public HTTPS URL with no laptop or tunnel involved.
+Same agent, same decision logic and real Groth16 proofs as the PC version,
+served by Vercel's Node.js server capture: Vercel detects `server.js` via
+its `listen()` call and routes all requests to it, so the agent runs on a
+permanent public HTTPS URL with no laptop or tunnel involved.
 
 ## How it works
 
-- Vercel invokes `api/index.js` per request. The handler reads the raw body,
-  verifies the `x-agent-games-signature` HMAC **before** parsing JSON,
-  answers preflight, decides, generates the proof with snarkjs, and returns
-  a signed response. Fail closed on any uncertainty, same as `server.js`.
-- `bodyParser` stays disabled (`module.exports.config` in `api/index.js`):
-  the HMAC is computed over the raw bytes, and any pre-parsing would break
-  signature verification.
+- Vercel captures `server.js` (detected via its `listen()` call) and routes
+  every request to it. The handler reads the raw body, verifies the
+  `x-agent-games-signature` HMAC **before** parsing JSON, answers
+  preflight, decides, generates the proof with snarkjs, and returns a
+  signed response. Fail closed on any uncertainty. The default export
+  MUST be the server itself (`module.exports = server`): exporting
+  `{ server }` crashed every invocation with "Invalid export found in
+  module /var/task/server.cjs" (incident 14 Nov 2026, deployment 8bfeb2c).
+- `api/index.js` is a tested fallback, not the live path; it keeps
+  `bodyParser` disabled (`module.exports.config`): the HMAC is computed
+  over the raw bytes, and any pre-parsing would break signature
+  verification. `server.js` reads the raw stream itself (`readRawBody`).
 - Circuit artifacts are NOT in the repo. The explicit `buildCommand` in
   `vercel.json` runs `scripts/fetch-circuits.js`, which downloads
   `gatekeeper.wasm` + `gatekeeper_final.zkey` from the official Agent
@@ -22,22 +28,24 @@ it runs on a permanent public HTTPS URL with no laptop or tunnel involved.
   build log had 21 lines and no fetch step. The explicit `buildCommand`
   is what guarantees the fetch.) If the bundled files are ever missing
   at request time, the handler downloads verified copies to `/tmp/`
-  as a last resort.
-- `.vercelignore` MUST exclude `server.js` (plus `seen.js` and the test
-  files). Without it, Vercel detects `server.js` as the project's root
-  entrypoint ("Using server.js as the root entrypoint") and serves ALL
-  traffic through it as `server.cjs` — but `server.js` is the
-  long-running PC process (`listen()` at load, exports `{ server }`),
-  so every invocation dies with "Invalid export found in module
-  /var/task/server.cjs" (incident 14 Nov 2026, 100% error rate).
-  Excluding it makes Vercel fall back to file-system routing and
-  `api/index.js` becomes the Serverless Function. The PC flow is
-  unaffected: `.vercelignore` only affects Vercel uploads.
-- `package.json` MUST NOT set `"main": "server.js"`. With `server.js`
-  excluded by `.vercelignore`, a `"main"` pointing at it makes the
-  build fail in seconds with "No entrypoint found in /vercel/path0"
-  (incident 14 Nov 2026, commit 33c9ada). No `"main"` + no server file
-  uploaded = Vercel builds `api/index.js` as a Serverless Function.
+  as a last resort. `prove.js` verifies every candidate (explicit opts,
+  `WASM_PATH`/`ZKEY_PATH` env pair, bundled files) by size + SHA-256 and
+  falls through to the next tier on any mismatch, so a stale PC-local env
+  override can never break proof generation.
+- `.vercelignore` MUST NOT exclude `server.js` or `seen.js` (only the test
+  files). Vercel detects `server.js` as the Node.js server entrypoint via
+  its `listen()` call and routes all traffic to it; `seen.js` is required
+  by it. Excluding `server.js` makes every build fail with "No entrypoint
+  found in /vercel/path0" (incidents 14 Nov 2026, commits 33c9ada and
+  97b4170): the `api/` directory alone does NOT trigger function
+  detection for this project. The earlier crash ("Invalid export found in
+  module /var/task/server.cjs", deployment 8bfeb2c) was the export shape
+  (`{ server }`), not the entrypoint itself — fixed by exporting the
+  server (see above).
+- `package.json` sets `"main": "server.js"` (restored). Removing it did
+  NOT fix the "No entrypoint found" builds (commit 97b4170 failed the
+  same way as 33c9ada): the entrypoint is detected from the `server.js`
+  filename + `listen()` call, and the file must be uploaded (see above).
   `npm start` (which runs `node server.js` directly) is unaffected.
 - `vercel.json` pins the function to `maxDuration: 60` (the platform's own
   task deadline) and includes `circuits/**` in the function bundle.
@@ -68,6 +76,7 @@ it runs on a permanent public HTTPS URL with no laptop or tunnel involved.
 ```sh
 npm install
 node scripts/fetch-circuits.js   # downloads + verifies artifacts
+node test.js                     # 11 checks: PC server path (spawn + HTTP + real proofs)
 node test-vercel.js              # 24 checks: 8 decision cases x2 resolution
                                  # paths + health + preflight + bad HMAC +
                                  # malformed envelope; every proof verified

@@ -1,19 +1,13 @@
-# Files Vercel must NOT upload, PLUS the package.json "main" rule (see below).
-# Lesson 1 (14 Nov 2026, 100% error rate): with server.js uploaded, Vercel
-# detected it as the root entrypoint ("Using server.js as the root
-# entrypoint") and served ALL traffic through it as server.cjs — but
-# server.js is the long-running PC process (listen() at load, exports
-# { server }), so every invocation died with "Invalid export found in
-# module /var/task/server.cjs".
-# Lesson 2 (14 Nov 2026, build failed in 6s): excluding server.js via
-# .vercelignore ALONE is not enough — package.json "main": "server.js"
-# made Vercel look for that file as the entrypoint and fail the build
-# with "No entrypoint found". package.json must NOT set "main" to
-# server.js; with no "main" and no server file uploaded, Vercel builds
-# api/index.js as a Serverless Function via file-system routing.
-# The PC flow is unaffected: .vercelignore only affects Vercel uploads,
-# git still tracks these files and `npm start` still runs server.js.
-server.js
-seen.js
+# Files Vercel must NOT upload (test files only).
+#
+# server.js and seen.js MUST be uploaded: Vercel detects server.js as the
+# Node.js server entrypoint via its listen() call, and seen.js is required
+# by it. Excluding server.js makes every build fail with "No entrypoint
+# found in /vercel/path0" (incidents 14 Nov 2026, commits 33c9ada and
+# 97b4170) — the api/ directory alone does NOT trigger function detection
+# for this project. The earlier runtime crash ("Invalid export found in
+# module /var/task/server.cjs", deployment 8bfeb2c) was the export shape
+# (`{ server }`), not the entrypoint itself — fixed by exporting the
+# server (see server.js).
 test.js
 test-vercel.js

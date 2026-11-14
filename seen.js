@@ -29,11 +29,19 @@ class SeenSet {
   }
 
   save() {
-    const dir = path.dirname(this.filePath);
-    fs.mkdirSync(dir, { recursive: true });
-    const tmp = this.filePath + '.tmp-' + process.pid;
-    fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(this.map), null, 1) + '\n', 'utf8');
-    fs.renameSync(tmp, this.filePath);
+    try {
+      const dir = path.dirname(this.filePath);
+      fs.mkdirSync(dir, { recursive: true });
+      const tmp = this.filePath + '.tmp-' + process.pid;
+      fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(this.map), null, 1) + '\n', 'utf8');
+      fs.renameSync(tmp, this.filePath);
+    } catch (err) {
+      // Persistence is best-effort: the Vercel filesystem is read-only
+      // except /tmp, and SEEN_FILE may point at a PC-local path. The
+      // in-memory map stays authoritative for this instance; a failed
+      // write must never fail a task decision.
+      console.error(JSON.stringify({ level: 'warn', msg: 'seen-set save failed, keeping in-memory only', error: String(err.message).slice(0, 120) }));
+    }
   }
 
   /** True if proofTxKey was recorded under a DIFFERENT task_id (redelivery of the same task is not reuse). */

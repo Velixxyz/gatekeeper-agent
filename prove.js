@@ -18,11 +18,10 @@
  * real wasm/zkey and returns the real proof + public signals, or throws.
  */
 const crypto = require('node:crypto');
+const path = require('node:path');
 const snarkjs = require('snarkjs');
 const { FIELD_PRIME } = require('./decide');
-
-const DEFAULT_WASM = './circuits/gatekeeper.wasm';
-const DEFAULT_ZKEY = './circuits/gatekeeper_final.zkey';
+const { fileIsValid, ensureCircuits, ARTIFACTS } = require('./lib/circuits');
 
 /**
  * Derive the circuit's taskId field element from the envelope's task_id string.
@@ -68,9 +67,47 @@ function buildCircuitInput(fields, decisionBit, taskIdString) {
  * Generate a real Groth16 proof. Throws on any failure (caller fails closed).
  * @returns {{ proof: object, publicSignals: string[] }}
  */
+/**
+ * Resolve verified circuit artifacts. NEVER trust an env override blindly:
+ * a stale PC-local WASM_PATH/ZKEY_PATH on Vercel would break every proof.
+ * Order: explicit opts (if both files valid) -> env pair (if both valid) ->
+ * bundled ./circuits/ next to this module (if valid) -> verified runtime
+ * download to /tmp/circuits (memoized per instance). Every candidate is
+ * checked by size + SHA-256. Throws only if no tier yields valid files.
+ */
+function artifactByName(name) {
+  return ARTIFACTS.find((a) => a.name === name);
+}
+
+function pairIsValid(wasmPath, zkeyPath) {
+  return !!wasmPath && !!zkeyPath
+    && fileIsValid(wasmPath, artifactByName('gatekeeper.wasm'))
+    && fileIsValid(zkeyPath, artifactByName('gatekeeper_final.zkey'));
+}
+
+let circuitsDownload = null;
+
+async function resolveCircuits(opts = {}) {
+  if (pairIsValid(opts.wasmPath, opts.zkeyPath)) {
+    return { wasmPath: opts.wasmPath, zkeyPath: opts.zkeyPath };
+  }
+  if (pairIsValid(process.env.WASM_PATH, process.env.ZKEY_PATH)) {
+    return { wasmPath: process.env.WASM_PATH, zkeyPath: process.env.ZKEY_PATH };
+  }
+  const bundledWasm = path.join(__dirname, 'circuits', 'gatekeeper.wasm');
+  const bundledZkey = path.join(__dirname, 'circuits', 'gatekeeper_final.zkey');
+  if (pairIsValid(bundledWasm, bundledZkey)) {
+    return { wasmPath: bundledWasm, zkeyPath: bundledZkey };
+  }
+  if (!circuitsDownload) {
+    circuitsDownload = ensureCircuits(path.join('/tmp', 'circuits'))
+      .catch((err) => { circuitsDownload = null; throw err; });
+  }
+  return circuitsDownload;
+}
+
 async function generateProof(fields, decisionBit, taskIdString, opts = {}) {
-  const wasmPath = opts.wasmPath || process.env.WASM_PATH || DEFAULT_WASM;
-  const zkeyPath = opts.zkeyPath || process.env.ZKEY_PATH || DEFAULT_ZKEY;
+  const { wasmPath, zkeyPath } = await resolveCircuits(opts);
   const input = buildCircuitInput(fields, decisionBit, taskIdString);
   const { proof, publicSignals } = await snarkjs.groth16.fullProve(input, wasmPath, zkeyPath);
   return { proof, publicSignals: publicSignals.map(String) };

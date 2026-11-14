@@ -169,7 +169,7 @@ async function handleTask(envelope) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.method === 'GET' && (req.url === '/health' || req.url === '/')) {
+    if (req.method === 'GET' && (req.url === '/health' || req.url === '/' || req.url === '/api' || req.url === '/api/index')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ ok: true, service: 'proof-gatekeeper', seen: seen.size }));
       return;
@@ -221,4 +221,9 @@ server.listen(PORT, () => {
   log({ msg: 'listening', port: PORT, seen_entries: seen.size, hmac: HMAC_SECRET ? 'env-secret' : 'PLACEHOLDER' });
 });
 
-module.exports = { server };
+// Vercel Node.js server capture: the platform detects this file via the
+// listen() call above and validates the default export — it MUST be a
+// function or a server. Exporting `{ server }` (a plain object) crashed
+// every invocation with "Invalid export found in module /var/task/server.cjs"
+// (incident 14 Nov 2026, deployment 8bfeb2c). Export the server itself.
+module.exports = server;
