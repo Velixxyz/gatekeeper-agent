@@ -1,0 +1,13 @@
+# Files Vercel must NOT upload. Without this, Vercel detects server.js as
+# the project's root entrypoint ("Using server.js as the root entrypoint")
+# and serves ALL traffic through it as server.cjs — but server.js is the
+# long-running PC process (listen() at load, exports { server }), so every
+# invocation dies with "Invalid export found in module /var/task/server.cjs"
+# (incident 14 Nov 2026, 100% error rate). Excluding it makes Vercel fall
+# back to file-system routing: api/index.js becomes the Serverless Function.
+# The PC flow is unaffected: .vercelignore only affects Vercel uploads,
+# git still tracks these files and `npm start` still runs server.js.
+server.js
+seen.js
+test.js
+test-vercel.js

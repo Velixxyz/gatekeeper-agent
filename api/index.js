@@ -14,7 +14,8 @@
  *    ephemeral; /tmp does not outlive a warm instance). Consequence: the
  *    PROOF_REUSED trap is only caught when both deliveries hit the same warm
  *    instance. The on-circuit decision is unaffected. See VERCEL.md.
- *  - Circuit artifacts resolve in order: WASM_PATH/ZKEY_PATH env, bundled
+ *  - Circuit artifacts resolve in order: WASM_PATH/ZKEY_PATH env (only if
+ *    the files verify — a stale or PC-local override is ignored), bundled
  *    ./circuits/ (fetched at build time by scripts/fetch-circuits.js),
  *    then a verified runtime download to /tmp/circuits/ as last resort.
  *  - Fail closed everywhere: any timeout, error, or uncertainty -> REJECT.
@@ -170,9 +171,16 @@ function bundledCandidates() {
 function resolveCircuits() {
   if (circuitsPromise) return circuitsPromise;
   circuitsPromise = (async () => {
-    // 1. Explicit env overrides.
+    // 1. Explicit env overrides — verified before use. A stale or PC-local
+    // WASM_PATH/ZKEY_PATH (e.g. copied from the PC .env into Vercel) must
+    // never break the deployment: invalid overrides fall through to the
+    // bundled artifacts below instead of being trusted blindly.
     if (process.env.WASM_PATH && process.env.ZKEY_PATH) {
-      return { wasmPath: process.env.WASM_PATH, zkeyPath: process.env.ZKEY_PATH };
+      const envCand = { wasmPath: process.env.WASM_PATH, zkeyPath: process.env.ZKEY_PATH };
+      if (fileIsValid(envCand.wasmPath, ARTIFACTS[0]) && fileIsValid(envCand.zkeyPath, ARTIFACTS[1])) {
+        return envCand;
+      }
+      log({ level: 'warn', msg: 'WASM_PATH/ZKEY_PATH set but artifacts invalid or missing, falling back to bundled circuits' });
     }
     // 2. Bundled artifacts (build-time fetch), verified before use.
     for (const cand of bundledCandidates()) {

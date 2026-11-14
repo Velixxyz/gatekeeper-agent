@@ -1,1 +1,1 @@
-{"$schema":"https://openapi.vercel.sh/vercel.json","functions":{"api/index.js":{"includeFiles":"circuits/**","maxDuration":60}},"rewrites":[{"destination":"/api/index.js","source":"/"}]}
+{"$schema":"https://openapi.vercel.sh/vercel.json","buildCommand":"node scripts/fetch-circuits.js","functions":{"api/index.js":{"includeFiles":"circuits/**","maxDuration":60}},"rewrites":[{"destination":"/api/index","source":"/"}]}

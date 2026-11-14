@@ -13,12 +13,26 @@ it runs on a permanent public HTTPS URL with no laptop or tunnel involved.
 - `bodyParser` stays disabled (`module.exports.config` in `api/index.js`):
   the HMAC is computed over the raw bytes, and any pre-parsing would break
   signature verification.
-- Circuit artifacts are NOT in the repo. The `vercel-build` script
-  (`scripts/fetch-circuits.js`) downloads `gatekeeper.wasm` +
-  `gatekeeper_final.zkey` from the official Agent Games site at build time
-  and verifies sizes + SHA-256 before the function is bundled. If the
-  bundled files are ever missing at request time, the handler downloads
-  verified copies to `/tmp/` as a last resort.
+- Circuit artifacts are NOT in the repo. The explicit `buildCommand` in
+  `vercel.json` runs `scripts/fetch-circuits.js`, which downloads
+  `gatekeeper.wasm` + `gatekeeper_final.zkey` from the official Agent
+  Games site at build time and verifies sizes + SHA-256 before the
+  function is bundled. (The `vercel-build` script in `package.json`
+  alone is NOT enough: on the 14 Nov 2026 deploy it never ran — the
+  build log had 21 lines and no fetch step. The explicit `buildCommand`
+  is what guarantees the fetch.) If the bundled files are ever missing
+  at request time, the handler downloads verified copies to `/tmp/`
+  as a last resort.
+- `.vercelignore` MUST exclude `server.js` (plus `seen.js` and the test
+  files). Without it, Vercel detects `server.js` as the project's root
+  entrypoint ("Using server.js as the root entrypoint") and serves ALL
+  traffic through it as `server.cjs` — but `server.js` is the
+  long-running PC process (`listen()` at load, exports `{ server }`),
+  so every invocation dies with "Invalid export found in module
+  /var/task/server.cjs" (incident 14 Nov 2026, 100% error rate).
+  Excluding it makes Vercel fall back to file-system routing and
+  `api/index.js` becomes the Serverless Function. The PC flow is
+  unaffected: `.vercelignore` only affects Vercel uploads.
 - `vercel.json` pins the function to `maxDuration: 60` (the platform's own
   task deadline) and includes `circuits/**` in the function bundle.
 - CommonJS throughout: snarkjs via ESM `import` hangs indefinitely on
